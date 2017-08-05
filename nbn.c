@@ -67,7 +67,7 @@ int BN_expand(BN *bn, unsigned int size) {
 
 int BN_top_set(BN *bn)
 {
-    return (bn->top == bn->len) ? (bn->n[bn->top] & 0x80) : 0;
+    return bn->n[bn->top] & 0x80;
 }
 
 void BN_expand_maybe(BN *bn)
@@ -91,15 +91,6 @@ void BN_dec_raw(uint8_t *n, unsigned int len) {
 
 /* decrement */
 void BN_dec(BN *bn) {
-    /* unsigned int i = 0; */
-    /* do { */
-    /*     if (bn->n[i] > 0) { */
-    /*         --bn->n[i]; */
-    /*         break; */
-    /*     } else { */
-    /*         bn->n[i] = ~bn->n[i]; */
-    /*     } */
-    /* } while (i++ <= bn->top); */
     BN_dec_raw(bn->n, bn->top);
     BN_fix(bn);
 }
@@ -155,12 +146,6 @@ void BN_copy(BN *res, BN *a) {
     }
 }
 
-static int max(int a, int b) {
-    if (a >= b)
-        return a;
-    return b;
-}
-
 /* const zero */
 BN *BN_zero() {
     static const unsigned char zero_[] = { 0x00 };
@@ -169,21 +154,44 @@ BN *BN_zero() {
     return &zero;
 }
 
+BN *BN_max(BN *a, BN *b) {
+    int cmp = BN_cmp(a, b);
+    if (cmp < 0)
+        return a;
+    else if (cmp > 1)
+        return b;
+    return a;
+}
+
+BN *BN_min(BN *a, BN *b) {
+    int cmp = BN_cmp(b, a);
+    if (cmp < 0)
+        return a;
+    else if (cmp > 1)
+        return b;
+    return a;
+}
+
 /* addition */
 void BN_add(BN *result, BN *a, BN *b) {
-    BN *counter = BN_new();
-    BN_copy(counter, b);
-
+    unsigned int max_top = (a->top > b->top) ? a->top : b->top;
     BN_copy(result, a);
-    if (BN_top_set(a) && BN_top_set(b)) {
-        BN_expand(result, result->top + 1);
+    BN_expand(result, max_top + 1);
+    BN_unfix(result);
+
+    unsigned int i = 0;
+    while (i <= b->top) {
+        uint8_t carry = result->n[i] & 0x80 || b->n[i] & 0x80;
+
+        result->n[i] += b->n[i];
+        if (carry) {
+            BN_inc_raw(result->n + i + 1, result->top - i - 1);
+        }
+
+        i++;
     }
 
-    while (BN_cmp(counter, BN_zero()) > 0) {
-        BN_inc(result);
-        BN_dec(counter);
-    }
-    BN_free(counter);
+    BN_fix(result);
 }
 
 void BN_add_u8(BN *result, BN *a, uint8_t i) {
@@ -197,11 +205,9 @@ void BN_add_u8(BN *result, BN *a, uint8_t i) {
         carry = 1;
     }
 
+    result->n[0] += i;
     if (carry) {
-        result->n[0] += i;
         BN_inc_raw(result->n + 1, result->top - 1);
-    } else {
-        result->n[0] += i;
     }
 
     BN_fix(result);
@@ -209,16 +215,20 @@ void BN_add_u8(BN *result, BN *a, uint8_t i) {
 
 /* subtraction */
 void BN_sub(BN *result, BN *a, BN *b) {
-    BN *counter = BN_new();
-    BN_copy(counter, b);
-
     BN_copy(result, a);
 
-    while (BN_cmp(counter, BN_zero()) > 0) {
-        BN_dec(result);
-        BN_dec(counter);
+    int i = b->top;
+    while (i >= 0) {
+        uint8_t borrow = b->n[i] > result->n[i];
+
+        result->n[i] -= b->n[i];
+        if (borrow) {
+            BN_dec_raw(result->n + i + 1, result->top - i - 1);
+        }
+
+        i--;
     }
-    BN_free(counter);
+
     BN_fix(result);
 }
 
