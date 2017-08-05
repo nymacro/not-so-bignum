@@ -233,8 +233,6 @@ void BN_sub(BN *result, BN *a, BN *b) {
 }
 
 void BN_sub_u8(BN *result, BN *a, uint8_t i) {
-    uint8_t x = 0;
-
     BN_copy(result, a);
     BN_fix(result);
 
