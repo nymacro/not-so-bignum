@@ -46,7 +46,7 @@ void BN_fix(BN *bn) {
 
 /* expand top to len */
 void BN_unfix(BN *bn) {
-    while (bn->top < bn->len)
+    while (bn->top < bn->len - 1)
         bn->n[++bn->top] = 0;
 }
 
@@ -176,7 +176,7 @@ BN *BN_min(BN *a, BN *b) {
 void BN_add(BN *result, BN *a, BN *b) {
     unsigned int max_top = (a->top > b->top) ? a->top : b->top;
     BN_copy(result, a);
-    BN_expand(result, max_top + 1);
+    BN_expand(result, max_top + 2);
     BN_unfix(result);
 
     unsigned int i = 0;
@@ -352,8 +352,7 @@ int main(int argc, char *argv[]) {
     BN_free(b);
 
 
-    /* */
-    printf("-----------------\n\n");
+    printf("-----------------\n");
     BN *x = BN_new_from_hex("ff");
     BN *r = BN_new();
     BN_add_u8(r, x, 32);
