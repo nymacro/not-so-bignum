@@ -50,7 +50,7 @@ void BN_unfix(BN *bn) {
         bn->n[++bn->top] = 0;
 }
 
-/* allocate additional memory for the number */
+/* allocate additional memory for the number, does not modify "top" */
 int BN_expand(BN *bn, unsigned int size) {
     uint8_t *new;
     if (bn->len >= size)
@@ -65,15 +65,17 @@ int BN_expand(BN *bn, unsigned int size) {
     return 1;
 }
 
+/* is the MSB set on top? */
 int BN_top_set(BN *bn)
 {
     return bn->n[bn->top] & 0x80;
 }
 
+/* expand if MSB is set */
 void BN_expand_maybe(BN *bn)
 {
     if (BN_top_set(bn)) {
-        BN_expand(bn, bn->len + 1);
+        BN_expand(bn, bn->top + 2);
     }
 }
 
