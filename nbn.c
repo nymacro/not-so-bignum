@@ -77,35 +77,52 @@ void BN_expand_maybe(BN *bn)
     }
 }
 
-/* decrement */
-void BN_dec(BN *bn) {
+void BN_dec_raw(uint8_t *n, unsigned int len) {
     unsigned int i = 0;
     do {
-        if (bn->n[i] > 0) {
-            --bn->n[i];
+        if (n[i] > 0) {
+            --n[i];
             break;
         } else {
-            bn->n[i] = ~bn->n[i];
+            n[i] = ~n[i];
         }
-    } while (i++ <= bn->top);
+    } while (i++ <= len);
+}
+
+/* decrement */
+void BN_dec(BN *bn) {
+    /* unsigned int i = 0; */
+    /* do { */
+    /*     if (bn->n[i] > 0) { */
+    /*         --bn->n[i]; */
+    /*         break; */
+    /*     } else { */
+    /*         bn->n[i] = ~bn->n[i]; */
+    /*     } */
+    /* } while (i++ <= bn->top); */
+    BN_dec_raw(bn->n, bn->top);
     BN_fix(bn);
+}
+
+/* increment raw buf */
+void BN_inc_raw(uint8_t *n, unsigned int len)
+{
+    unsigned int i = 0;
+    do {
+        if (n[i] < 255) {
+            ++n[i];
+            break;
+        } else {
+            n[i] = ~n[i];
+        }
+    } while (i++ <= len);
 }
 
 /* increment */
 void BN_inc(BN *bn) {
-    unsigned int i = 0;
-
     BN_expand_maybe(bn);
     BN_unfix(bn);
-
-    do {
-        if (bn->n[i] < 255) {
-            ++bn->n[i];
-            break;
-        } else {
-            bn->n[i] = ~bn->n[i];
-        }
-    } while (i++ <= bn->top);
+    BN_inc_raw(bn->n, bn->top);
     BN_fix(bn);
 }
 
@@ -170,10 +187,24 @@ void BN_add(BN *result, BN *a, BN *b) {
 }
 
 void BN_add_u8(BN *result, BN *a, uint8_t i) {
-    BN_copy(result, a);
-    BN_expand(result, result->top + 1);
+    uint8_t carry = 0;
 
-    // 
+    BN_copy(result, a);
+    BN_expand_maybe(result);
+    BN_unfix(result);
+
+    if (i & 0x80 || a->n[0] & 0x80) {
+        carry = 1;
+    }
+
+    if (carry) {
+        result->n[0] += i;
+        BN_inc_raw(result->n + 1, result->top - 1);
+    } else {
+        result->n[0] += i;
+    }
+
+    BN_fix(result);
 }
 
 /* subtraction */
@@ -182,13 +213,35 @@ void BN_sub(BN *result, BN *a, BN *b) {
     BN_copy(counter, b);
 
     BN_copy(result, a);
-    BN_expand(result, result->top + 1);
 
     while (BN_cmp(counter, BN_zero()) > 0) {
         BN_dec(result);
         BN_dec(counter);
     }
     BN_free(counter);
+    BN_fix(result);
+}
+
+void BN_sub_u8(BN *result, BN *a, uint8_t i) {
+    uint8_t x = 0;
+
+    BN_copy(result, a);
+    BN_fix(result);
+
+    uint8_t borrow = 0;
+
+    if (i > a->n[0]) {
+        borrow = 1;
+    }
+
+    if (borrow) {
+        result->n[0] -= i;
+        BN_dec_raw(result->n + 1, result->top - 1);
+    } else {
+        result->n[0] -= i;
+    }
+
+    BN_fix(result);
 }
 
 void BN_print(BN *bn) {
@@ -289,6 +342,18 @@ int main(int argc, char *argv[]) {
 
     BN_free(a);
     BN_free(b);
+
+
+    /* */
+    printf("-----------------\n\n");
+    BN *x = BN_new_from_hex("ff");
+    BN *r = BN_new();
+    BN_add_u8(r, x, 32);
+    BN_print(r);
+    BN_sub_u8(x, r, 32);
+    BN_print(x);
+    BN_free(x);
+    BN_free(r);
 
     return 0;
 }
