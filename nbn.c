@@ -1,3 +1,6 @@
+/*
+ * not-so-bignum library
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +21,7 @@ BN *BN_new() {
         return NULL;
     bn->len = size;
     bn->top = 0;
-    bn->n = malloc(size);
+    bn->n = malloc(sizeof(uint8_t) * size);
     if (bn->n == NULL) {
         free(bn);
         return NULL;
@@ -34,31 +37,27 @@ void BN_free(BN *bn) {
 
 /* adjust the top down to the element with a non-zero value */
 void BN_fix(BN *bn) {
-    unsigned int i = bn->top;
-    do {
-        if (i == 0)
+    while (bn->top > 0) {
+        if (bn->n[bn->top] != 0)
             break;
-        if (bn->n[i] != 0)
-            break;
-    } while (i-- > 0);
-    bn->top = i;
+        bn->top--;
+    }
 }
 
 /* expand top to len */
 void BN_unfix(BN *bn) {
-    while (bn->top < bn->len - 1)
+    while (bn->top < bn->len - 1) {
         bn->n[++bn->top] = 0;
+    }
 }
 
 /* allocate additional memory for the number, does not modify "top" */
 int BN_expand(BN *bn, unsigned int size) {
-    uint8_t *new;
     if (bn->len >= size)
         return 1;
-    new = realloc(bn->n, size);
-    if (new == NULL)
-        return 0;
-    bn->n = new;
+    bn->n = realloc(bn->n, sizeof(uint8_t) * size);
+    if (bn->n == NULL)
+        abort();
     bn->len = size;
     for (unsigned int i = bn->top + 1; i < bn->len; i++)
         bn->n[i] = 0;
@@ -71,29 +70,22 @@ int BN_top_set(BN *bn)
     return bn->n[bn->top] & 0x80;
 }
 
-/* expand if MSB is set */
-void BN_expand_maybe(BN *bn)
-{
-    if (BN_top_set(bn)) {
-        BN_expand(bn, bn->top + 2);
-    }
-}
-
 void BN_dec_raw(uint8_t *n, unsigned int len) {
     unsigned int i = 0;
-    do {
+    while (i < len) {
         if (n[i] > 0) {
             --n[i];
             break;
         } else {
             n[i] = ~n[i];
         }
-    } while (i++ <= len);
+        i++;
+    }
 }
 
 /* decrement */
 void BN_dec(BN *bn) {
-    BN_dec_raw(bn->n, bn->top);
+    BN_dec_raw(bn->n, bn->top + 1);
     BN_fix(bn);
 }
 
@@ -101,21 +93,22 @@ void BN_dec(BN *bn) {
 void BN_inc_raw(uint8_t *n, unsigned int len)
 {
     unsigned int i = 0;
-    do {
+    while (i < len) {
         if (n[i] < 255) {
             ++n[i];
             break;
         } else {
             n[i] = ~n[i];
         }
-    } while (i++ <= len);
+        i++;
+    }
 }
 
 /* increment */
 void BN_inc(BN *bn) {
-    BN_expand_maybe(bn);
+    BN_expand(bn, bn->top + 2);
     BN_unfix(bn);
-    BN_inc_raw(bn->n, bn->top);
+    BN_inc_raw(bn->n, bn->top + 1);
     BN_fix(bn);
 }
 
@@ -138,23 +131,49 @@ int BN_cmp(BN *a, BN *b) {
     return 0;
 }
 
-/* number copy */
+/* number copy (copies to existing BN) */
 void BN_copy(BN *res, BN *a) {
     unsigned int i;
-    BN_expand(res, a->len);
+    if (res == a)
+        abort();
+    if (res->len < a->len) {
+        res->n = realloc(res->n, sizeof(uint8_t) * a->len);
+        res->len = a->len;
+    }
     res->top = a->top;
     for (i = 0; i <= a->top; i++) {
         res->n[i] = a->n[i];
     }
+    for (++i; i < a->len; i++) {
+        res->n[i] = 0;
+    }
 }
 
+#define BN_const_define(name, value) \
+    BN *BN_##name() { \
+        static const uint8_t value_[] = { value }; \
+        static BN name = { 0, 1, NULL }; \
+        name.n = (uint8_t*)value_; \
+        return &name; \
+    }
+
 /* const zero */
-BN *BN_zero() {
-    static const unsigned char zero_[] = { 0x00 };
-    static BN zero = { 0, 1, NULL };
-    zero.n = (unsigned char*)zero_;
-    return &zero;
-}
+/* BN *BN_zero() { */
+/*     static const unsigned char zero_[] = { 0x00 }; */
+/*     static BN zero = { 0, 1, NULL }; */
+/*     zero.n = (unsigned char*)zero_; */
+/*     return &zero; */
+/* } */
+
+BN_const_define(zero, 0x00);
+BN_const_define(one, 0x01);
+BN_const_define(two, 0x02);
+BN_const_define(three, 0x03);
+BN_const_define(four, 0x04);
+BN_const_define(five, 0x05);
+BN_const_define(six, 0x06);
+BN_const_define(seven, 0x07);
+BN_const_define(eight, 0x08);
 
 BN *BN_max(BN *a, BN *b) {
     int cmp = BN_cmp(a, b);
@@ -174,7 +193,50 @@ BN *BN_min(BN *a, BN *b) {
     return a;
 }
 
-/* addition */
+/* len should be large enough to contain the shifted amount */
+void BN_shl_raw(uint8_t *n, unsigned int len, uint8_t shift) {
+    int i = 0;
+    uint8_t offset = shift % 8;
+    uint8_t bytes  = shift / 8;
+    uint8_t mask   = 0;
+
+    for (i = 7; i > 7 - offset; i--)
+        mask |= 1 << i;
+
+    /* move around the bytes */
+    if (bytes) {
+        i = bytes;
+        while (i > 0) {
+            n[i] = n[bytes - i];
+            n[bytes - i] = 0;
+            i--;
+        }
+    }
+
+    /* move around the bits */
+    if (offset) {
+        i = len - 1;
+        while (i >= 0) {
+            uint8_t carry = n[i] & mask;
+            n[i] <<= offset;
+            if (carry) {
+                /* n[i + 1] = ((n[i + 1] & mask) << offset) | (carry >> offset); */
+                n[i + 1] |= carry >> (8 - offset);
+            }
+            i--;
+        }
+    }
+}
+
+void BN_shl_u8(BN *result, BN *a, uint8_t shl) {
+    BN_copy(result, a);
+    BN_expand(result, result->top + 3 + (shl / 8));
+    BN_unfix(result);
+    BN_shl_raw(result->n, result->len, shl);
+    BN_fix(result);
+}
+
+/* addition: r = a + b */
 void BN_add(BN *result, BN *a, BN *b) {
     unsigned int max_top = (a->top > b->top) ? a->top : b->top;
     BN_copy(result, a);
@@ -187,7 +249,7 @@ void BN_add(BN *result, BN *a, BN *b) {
 
         result->n[i] += b->n[i];
         if (carry) {
-            BN_inc_raw(result->n + i + 1, result->top - i - 1);
+            BN_inc_raw(result->n + i + 1, result->top + 1 - i);
         }
 
         i++;
@@ -200,7 +262,7 @@ void BN_add_u8(BN *result, BN *a, uint8_t i) {
     uint8_t carry = 0;
 
     BN_copy(result, a);
-    BN_expand_maybe(result);
+    BN_expand(result, result->top + 2);
     BN_unfix(result);
 
     if (i & 0x80 || a->n[0] & 0x80) {
@@ -209,15 +271,17 @@ void BN_add_u8(BN *result, BN *a, uint8_t i) {
 
     result->n[0] += i;
     if (carry) {
-        BN_inc_raw(result->n + 1, result->top - 1);
+        BN_inc_raw(result->n + 1, result->top);
     }
 
     BN_fix(result);
 }
 
-/* subtraction */
+/* subtraction: r = a - b */
 void BN_sub(BN *result, BN *a, BN *b) {
     BN_copy(result, a);
+    BN_fix(result);
+    BN_fix(b);
 
     int i = b->top;
     while (i >= 0) {
@@ -225,7 +289,7 @@ void BN_sub(BN *result, BN *a, BN *b) {
 
         result->n[i] -= b->n[i];
         if (borrow) {
-            BN_dec_raw(result->n + i + 1, result->top - i - 1);
+            BN_dec_raw(result->n + i + 1, result->top - i);
         }
 
         i--;
@@ -246,12 +310,45 @@ void BN_sub_u8(BN *result, BN *a, uint8_t i) {
 
     if (borrow) {
         result->n[0] -= i;
-        BN_dec_raw(result->n + 1, result->top - 1);
+        BN_dec_raw(result->n + 1, result->top);
     } else {
         result->n[0] -= i;
     }
 
     BN_fix(result);
+}
+
+/* multiplication: r = a * b */
+void BN_mul(BN *result, BN *a, BN *b) {
+    uint8_t max_top = (a->top > b->top) ? a->top : b->top;
+    if (BN_top_set(a) || BN_top_set(b)) {
+        max_top += 1;
+    }
+    BN_copy(result, BN_zero());
+    BN_expand(result, (max_top + 2) * 2);
+
+    BN *tmp1 = BN_new();
+    BN *tmp2 = BN_new();
+
+    unsigned int i = 0;
+    while (i <= b->top) {
+        for (int bit = 0; bit < 8; bit++) {
+            uint8_t z = b->n[i] & (1 << bit);
+            if (z) {
+                BN_shl_u8(tmp1, a, i * 8 + bit);
+                BN_copy(tmp2, result);
+                BN_add(result, tmp1, tmp2);
+            }
+        }
+        i++;
+    }
+    BN_free(tmp1);
+    BN_free(tmp2);
+}
+
+/* division: r = a / b */
+void BN_div(BN *result, BN *a, BN *b) {
+    /* DO ME */
 }
 
 void BN_print(BN *bn) {
@@ -323,12 +420,17 @@ int main(int argc, char *argv[]) {
     BN *a = BN_new_from_hex("feff");
     for (unsigned int i = 0; i < 17; i++)
         BN_dec(a);
-    BN_print(a);
+    BN_print(a); /* => feee */
 
     BN *b = BN_new_from_hex("0f10");
     for (unsigned int i = 0; i < 20000; i++)
         BN_inc(b);
-    BN_print(b);
+    BN_print(b); /* => 5d30 */
+
+    BN *z = BN_new_from_hex("ffff");
+    BN_inc(z);
+    BN_print(z); /* => 010000 */
+    BN_free(z);
 
     printf("a <=> b :: %i\n", BN_cmp(a, b));
     printf("b <=> a :: %i\n", BN_cmp(b, a));
@@ -336,32 +438,131 @@ int main(int argc, char *argv[]) {
     printf("b <=> 0 :: %i\n", BN_cmp(b, BN_zero()));
     printf("0 <=> 0 :: %i\n", BN_cmp(BN_zero(), BN_zero()));
 
+    puts("\nAddition");
+    puts("--------");
     BN *c = BN_new();
     BN_add(c, a, b);
-    BN_print(c);
+    BN_print(c); /* => 015c1e */
     BN_free(c);
 
+    puts("\nSubtraction");
+    puts("-----------");
     BN *d = BN_new();
     BN_sub(d, a, b);
-    BN_print(d);
+    BN_print(d); /* => a1be */
     BN_free(d);
-
-    BN *e = BN_new_from_hex("f");
-    BN_print(e);
-    BN_free(e);
 
     BN_free(a);
     BN_free(b);
 
+    puts("\nFrom Hex");
+    puts("--------");
+    BN *e = BN_new_from_hex("f");
+    BN_print(e); /* => 0f */
+    BN_free(e);
 
-    printf("-----------------\n");
+
+    puts("\nAdd/Sub U8");
+    puts("------");
     BN *x = BN_new_from_hex("ff");
     BN *r = BN_new();
     BN_add_u8(r, x, 32);
-    BN_print(r);
+    BN_print(r); /* => 011f */
     BN_sub_u8(x, r, 32);
-    BN_print(x);
+    BN_print(x); /* => ff */
     BN_free(x);
+
+    x = BN_new_from_hex("05");
+    BN_sub_u8(r, x, 3);
+    BN_print(r); /* => 02 */
+    BN_free(x);
+
+    puts("\nShift");
+    puts("-----");
+    printf("1 << 2 = ");
+    BN_shl_u8(r, BN_one(), 2);
+    BN_print(r);
+    printf("2 << 3 = ");
+    BN_shl_u8(r, BN_two(), 3);
+    BN_print(r);
+    printf("1 << 16 = ");
+    BN_shl_u8(r, BN_one(), 16);
+    BN_print(r);
+    printf("1 << 15 = ");
+    BN_shl_u8(r, BN_one(), 15);
+    BN_print(r);
+    printf("255 << 11 = ");
+    BN *ff = BN_new_from_hex("ff");
+    BN_shl_u8(r, ff, 11); /* => 07f800 */
+    BN_print(r);
+
+    printf("255 << 1 = ");
+    BN_shl_u8(r, ff, 1);
+    BN_print(r); /* => 01fe */
+    printf("255 << 2 = ");
+    BN_shl_u8(r, ff, 2);
+    BN_print(r); /* => 03fc */
+    printf("255 << 3 = ");
+    BN_shl_u8(r, ff, 3);
+    BN_print(r); /* => 07f8 */
+    printf("255 << 4 = ");
+    BN_shl_u8(r, ff, 4);
+    BN_print(r); /* => 0ff0 */
+    printf("255 << 5 = ");
+    BN_shl_u8(r, ff, 5);
+    BN_print(r); /* => 1fe0 */
+    printf("255 << 6 = ");
+    BN_shl_u8(r, ff, 6);
+    BN_print(r); /* => 3fc0 */
+    printf("255 << 7 = ");
+    BN_shl_u8(r, ff, 7);
+    BN_print(r); /* => 7f80 */
+    printf("255 << 8 = ");
+    BN_shl_u8(r, ff, 8);
+    BN_print(r); /* => ff00 */
+
+    BN_free(ff);
+
+    puts("\nMultiplication");
+    puts("--------------");
+
+    printf("3 * 3 = ");
+    BN_mul(r, BN_three(), BN_three());
+    BN_print(r);
+
+    printf("2 * 1 = ");
+    BN_mul(r, BN_two(), BN_one());
+    BN_print(r);
+
+    printf("8 * 8 = ");
+    BN_mul(r, BN_eight(), BN_eight());
+    BN_print(r);
+
+    printf("2 * 2 = ");
+    BN_mul(r, BN_two(), BN_two());
+    BN_print(r);
+
+    printf("2 * 4 = ");
+    BN_mul(r, BN_two(), BN_four());
+    BN_print(r);
+
+    printf("1 * 1 = ");
+    BN_mul(r, BN_one(), BN_one());
+    BN_print(r);
+
+    printf("8 * 0 = ");
+    BN_mul(r, BN_eight(), BN_zero());
+    BN_print(r);
+
+    /* FIXME */
+    printf("255 * 255 = ");
+    a = BN_new_from_hex("ff");
+    b = BN_new_from_hex("ff");
+    BN_mul(r, a, b);
+    BN_print(r); /* => fe01 */
+    BN_free(a);
+    BN_free(b);
+
     BN_free(r);
 
     return 0;
