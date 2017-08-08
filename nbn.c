@@ -245,7 +245,7 @@ void BN_add(BN *result, BN *a, BN *b) {
 
     unsigned int i = 0;
     while (i <= b->top) {
-        uint8_t carry = result->n[i] & 0x80 || b->n[i] & 0x80;
+        uint8_t carry = result->n[i] & 0x80 && b->n[i] & 0x80;
 
         result->n[i] += b->n[i];
         if (carry) {
@@ -554,7 +554,6 @@ int main(int argc, char *argv[]) {
     BN_mul(r, BN_eight(), BN_zero());
     BN_print(r);
 
-    /* FIXME */
     printf("255 * 255 = ");
     a = BN_new_from_hex("ff");
     b = BN_new_from_hex("ff");
