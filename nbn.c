@@ -205,12 +205,14 @@ void BN_shl_raw(uint8_t *n, unsigned int len, uint8_t shift) {
 
     /* move around the bytes */
     if (bytes) {
-        i = bytes;
-        while (i > 0) {
-            n[i] = n[bytes - i];
-            n[bytes - i] = 0;
+        i = len - 1;
+        do {
+            n[i] = n[i - bytes];
             i--;
-        }
+        } while (i >= bytes);
+
+        while (i >= 0)
+            n[i--] = 0;
     }
 
     /* move around the bits */
@@ -220,7 +222,6 @@ void BN_shl_raw(uint8_t *n, unsigned int len, uint8_t shift) {
             uint8_t carry = n[i] & mask;
             n[i] <<= offset;
             if (carry) {
-                /* n[i + 1] = ((n[i + 1] & mask) << offset) | (carry >> offset); */
                 n[i + 1] |= carry >> (8 - offset);
             }
             i--;
@@ -351,6 +352,7 @@ void BN_div(BN *result, BN *a, BN *b) {
     /* DO ME */
 }
 
+/* print bignum as hex to screen */
 void BN_print(BN *bn) {
     unsigned int i = bn->top;
     do {
@@ -452,15 +454,11 @@ int main(int argc, char *argv[]) {
     BN_print(d); /* => a1be */
     BN_free(d);
 
-    BN_free(a);
-    BN_free(b);
-
     puts("\nFrom Hex");
     puts("--------");
     BN *e = BN_new_from_hex("f");
     BN_print(e); /* => 0f */
     BN_free(e);
-
 
     puts("\nAdd/Sub U8");
     puts("------");
@@ -555,13 +553,25 @@ int main(int argc, char *argv[]) {
     BN_print(r);
 
     printf("255 * 255 = ");
-    a = BN_new_from_hex("ff");
-    b = BN_new_from_hex("ff");
+    BN_from_hex(a, "ff");
+    BN_from_hex(b, "ff");
     BN_mul(r, a, b);
     BN_print(r); /* => fe01 */
+
+    printf("0xffffff * 2 = ");
+    BN_from_hex(a, "ffffff");
+    BN_from_hex(b, "02");
+    BN_mul(r, a, b);
+    BN_print(r); /* => 01fffffe */
+
+    printf("0xdeadbeef * 0xf0000000 = ");
+    BN_from_hex(a, "deadbeef");
+    BN_from_hex(b, "f0000000");
+    BN_mul(r, a, b);
+    BN_print(r); /* => d0c1e20010000000 */
+
     BN_free(a);
     BN_free(b);
-
     BN_free(r);
 
     return 0;
