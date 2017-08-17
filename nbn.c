@@ -263,15 +263,13 @@ void BN_add(BN *result, BN *a, BN *b) {
 }
 
 void BN_add_u8(BN *result, BN *a, uint8_t i) {
-    uint8_t carry = 0;
+    uint16_t carry = 0;
 
     BN_copy(result, a);
     BN_expand(result, result->top + 2);
     BN_unfix(result);
 
-    if (i & 0x80 || a->n[0] & 0x80) {
-        carry = 1;
-    }
+    carry = ((uint16_t)a->n[0] + i) > 255;
 
     result->n[0] += i;
     if (carry) {
@@ -389,11 +387,12 @@ uint8_t atoh(char c) {
 /* make a bignum from a hex string */
 int BN_from_hex(BN *bn, char *str) {
     size_t len = strlen(str);
-    unsigned int i = 0;
-    unsigned int d;
-    unsigned int size = (len > 1) ? len / 2 : 1;
+    uint8_t i = 0;
+    uint8_t size = (len > 1) ? len / 2 : 1;
+    int16_t d;
 
-    BN_expand(bn, size);
+    BN_expand(bn, size + 1);
+    BN_unfix(bn);
 
     bn->top = size - 1;
     d = bn->top;
@@ -404,8 +403,11 @@ int BN_from_hex(BN *bn, char *str) {
     }
 
     for (; i < len; i += 2) {
+        assert(d >= 0);
         bn->n[d--] = (atoh(str[i]) << 4) | atoh(str[i+1]);
     }
+
+    BN_fix(bn);
 
     return 1;
 }
@@ -447,6 +449,8 @@ int main(int argc, char *argv[]) {
     BN_assert_eq(z, "010000");
     BN_free(z);
 
+    puts("\nComparison");
+    puts("----------");
     printf("a <=> b :: %i\n", BN_cmp(a, b));
     printf("b <=> a :: %i\n", BN_cmp(b, a));
     printf("a <=> 0 :: %i\n", BN_cmp(a, BN_zero()));
@@ -456,6 +460,7 @@ int main(int argc, char *argv[]) {
     puts("\nAddition");
     puts("--------");
     BN *c = BN_new();
+    printf("0xfeee + 0x5d30 = ");
     BN_add(c, a, b);
     BN_print(c); /* => 015c1e */
     BN_assert_eq(c, "015c1e");
@@ -464,6 +469,7 @@ int main(int argc, char *argv[]) {
     puts("\nSubtraction");
     puts("-----------");
     BN *d = BN_new();
+    printf("0xfeee + 0x5d30 = ");
     BN_sub(d, a, b);
     BN_print(d); /* => a1be */
     BN_assert_eq(d, "a1be");
@@ -480,15 +486,21 @@ int main(int argc, char *argv[]) {
     puts("------");
     BN *x = BN_new_from_hex("ff");
     BN *r = BN_new();
+    printf("255 + 32 = ");
     BN_add_u8(r, x, 32);
     BN_print(r); /* => 011f */
     BN_assert_eq(r, "011f");
+    printf("287 - 32 = ");
     BN_sub_u8(x, r, 32);
     BN_print(x); /* => ff */
     BN_assert_eq(x, "ff");
-    BN_free(x);
+    printf("255 + 255 = ");
+    BN_add(r, x, x);
+    BN_print(r);
+    BN_assert_eq(r, "01fe");
 
-    x = BN_new_from_hex("05");
+    printf("5 - 3 = ");
+    BN_from_hex(x, "05");
     BN_sub_u8(r, x, 3);
     BN_print(r); /* => 02 */
     BN_assert_eq(r, "02");
