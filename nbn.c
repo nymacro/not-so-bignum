@@ -149,31 +149,25 @@ void BN_copy(BN *res, BN *a) {
     }
 }
 
-#define BN_const_define(name, value) \
-    BN *BN_##name() { \
-        static const uint8_t value_[] = { value }; \
-        static BN name = { 0, 1, NULL }; \
-        name.n = (uint8_t*)value_; \
-        return &name; \
+#define BN_const_define(name, value)                                    \
+    BN *BN_##name() {                                                   \
+        static const uint8_t value_[] = value;                          \
+        static BN name = { sizeof(value_)-1, sizeof(value_), NULL };    \
+        name.n = (uint8_t*)value_;                                      \
+        return &name;                                                   \
     }
 
-/* const zero */
-/* BN *BN_zero() { */
-/*     static const unsigned char zero_[] = { 0x00 }; */
-/*     static BN zero = { 0, 1, NULL }; */
-/*     zero.n = (unsigned char*)zero_; */
-/*     return &zero; */
-/* } */
-
-BN_const_define(zero, 0x00);
-BN_const_define(one, 0x01);
-BN_const_define(two, 0x02);
-BN_const_define(three, 0x03);
-BN_const_define(four, 0x04);
-BN_const_define(five, 0x05);
-BN_const_define(six, 0x06);
-BN_const_define(seven, 0x07);
-BN_const_define(eight, 0x08);
+BN_const_define(zero, { 0x00 });
+BN_const_define(one, { 0x01 });
+BN_const_define(two, { 0x02 });
+BN_const_define(three, { 0x03 });
+BN_const_define(four, { 0x04 });
+BN_const_define(five, { 0x05 });
+BN_const_define(six, { 0x06 });
+BN_const_define(seven, { 0x07 });
+BN_const_define(eight, { 0x08 });
+BN_const_define(nine, { 0x09 });
+BN_const_define(ten, { 0x0a });
 
 BN *BN_max(BN *a, BN *b) {
     int cmp = BN_cmp(a, b);
