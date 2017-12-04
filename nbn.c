@@ -135,8 +135,10 @@ int BN_cmp(BN *a, BN *b) {
 /* number copy (copies to existing BN) */
 void BN_copy(BN *res, BN *a) {
     unsigned int i;
-    if (res == a)
-        abort();
+    if (res == a) {
+        /* abort(); */
+        return;
+    }
     if (res->len < a->len) {
         res->n = realloc(res->n, sizeof(uint8_t) * a->len);
         res->len = a->len;
@@ -240,6 +242,54 @@ void BN_shl_u64(BN *result, BN *a, uint64_t shl) {
     BN_fix(result);
 }
 
+void BN_shr_raw(uint8_t *n, unsigned int len, uint64_t shift) {
+    int i = 0;
+    uint8_t offset = shift % 8;
+    uint8_t bytes  = shift / 8;
+    uint8_t mask   = 0;
+
+    for (i = 0; i < offset; i++)
+        mask |= 1 << i;
+
+    /* move around the bits */
+    if (offset) {
+        i = len - 1;
+        do {
+            uint8_t carry = n[i] & mask;
+            n[i] >>= offset;
+            if (carry && i - 1 >= 0) {
+                n[i - 1] |= carry << (8 - offset);
+            }
+            i--;
+        } while (i > 0);
+    }
+
+    /* move around the bytes */
+    if (bytes) {
+        i = 0;
+        while (i < len) {
+            n[i] = n[i + 1];
+            n[i + 1] = 0;
+            i++;
+        }
+    }
+
+}
+
+void BN_shr_u8(BN *result, BN *a, uint8_t shr) {
+    BN_copy(result, a);
+    BN_fix(result);
+    BN_shr_raw(result->n, result->top + 1, shr);
+    BN_fix(result);
+}
+
+void BN_shr_u64(BN *result, BN *a, uint64_t shr) {
+    BN_copy(result, a);
+    BN_fix(result);
+    BN_shr_raw(result->n, result->top + 1, shr);
+    BN_fix(result);
+}
+
 /* addition: r = a + b */
 void BN_add(BN *result, BN *a, BN *b) {
     unsigned int max_top = (a->top > b->top) ? a->top : b->top;
@@ -321,6 +371,7 @@ void BN_sub_u8(BN *result, BN *a, uint8_t i) {
 }
 
 /* multiplication: r = a * b */
+/* shift and add method */
 void BN_mul(BN *result, BN *a, BN *b) {
     uint8_t max_top = (a->top > b->top) ? a->top : b->top;
     if (BN_top_set(a) || BN_top_set(b)) {
@@ -348,14 +399,35 @@ void BN_mul(BN *result, BN *a, BN *b) {
     BN_free(tmp2);
 }
 
-/* division: r = a / b */
-void BN_div(BN *result, BN *a, BN *b) {
-    /* DO ME */
+/* division: q, r = a / b */
+/* repeated division method */
+void BN_div(BN *q, BN *r, BN *n, BN *d) {
+    BN *tmp1 = BN_new();
+    BN *tmp2 = BN_new();
+    BN_copy(tmp1, n);
+    BN_copy(tmp2, BN_zero());
+
+    while (BN_cmp(tmp1, d) >= 0) {
+        BN_sub(r, tmp1, d);
+        BN_copy(tmp1, r);
+
+        BN_add_u8(q, tmp2, 1);
+        BN_copy(tmp2, q);
+    }
+
+    BN_copy(r, tmp1);
+    BN_copy(q, tmp2);
+
+    BN_free(tmp1);
+    BN_free(tmp2);
+
+    BN_fix(q);
+    BN_fix(r);
 }
 
 /* print bignum as hex to screen */
 void BN_print(BN *bn) {
-    unsigned int i = bn->top;
+    int i = bn->top;
     do {
         printf("%02x", bn->n[i]);
     } while (i-- > 0);
@@ -563,6 +635,44 @@ int main(int argc, char *argv[]) {
     BN_shl_u64(r, BN_one(), 1024);
     BN_print(r);
 
+    printf("255 >> 1 = ");
+    BN_shr_u8(r, ff, 1);
+    BN_print(r); /* => 7f */
+    BN_assert_eq(r, "7f");
+
+    printf("255 >> 4 = ");
+    BN_shr_u8(r, ff, 4);
+    BN_print(r); /* => 0f */
+    BN_assert_eq(r, "0f");
+
+    printf("255 >> 7 = ");
+    BN_shr_u8(r, ff, 7);
+    BN_print(r); /* => 01 */
+    BN_assert_eq(r, "01");
+
+    printf("255 >> 8 = ");
+    BN_shr_u8(r, ff, 8);
+    BN_print(r); /* => 00 */
+    BN_assert_eq(r, "00");
+
+    BN_from_hex(ff, "ff00");
+    printf("0xff00 >> 8 = ");
+    BN_shr_u8(r, ff, 8);
+    BN_print(r); /* => ff */
+    BN_assert_eq(r, "ff");
+
+    BN_from_hex(ff, "0fff");
+    printf("4095 >> 4 = ");
+    BN_shr_u8(r, ff, 4);
+    BN_print(r); /* => ff */
+    BN_assert_eq(r, "ff");
+
+    printf("1 << 10 >> 10 = ");
+    BN_shl_u8(ff, BN_one(), 10);
+    BN_shr_u8(r, ff, 10);
+    BN_print(r);
+    BN_assert_eq(r, "01");
+
     BN_free(ff);
 
     puts("\nMultiplication");
@@ -623,6 +733,33 @@ int main(int argc, char *argv[]) {
     BN_mul(r, a, b);
     BN_print(r); /* => d0c2e30010000000 */
     BN_assert_eq(r, "d0c2e30010000000");
+
+    puts("\nDivsion");
+    puts("--------------");
+
+    printf("1 / 1 = ");
+    BN_div(a, b, BN_one(), BN_one());
+    BN_print(a);
+    BN_assert_eq(a, "01");
+    BN_assert_eq(b, "00");
+
+    printf("2 / 1 = ");
+    BN_div(a, b, BN_two(), BN_one());
+    BN_print(a);
+    BN_assert_eq(a, "02");
+    BN_assert_eq(b, "00");
+
+    printf("1 / 2 = ");
+    BN_div(a, b, BN_one(), BN_two());
+    BN_print(a);
+    BN_assert_eq(a, "00");
+    BN_assert_eq(b, "01");
+
+    printf("10 / 3 = ");
+    BN_div(a, b, BN_ten(), BN_three());
+    BN_print(a);
+    BN_assert_eq(a, "03");
+    BN_assert_eq(b, "01");
 
     BN_free(a);
     BN_free(b);
