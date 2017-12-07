@@ -1,10 +1,17 @@
-CFLAGS=-g -Wall
-.PHONY: clean
+CFLAGS=-fPIC -fpic -g -Wall
+.PHONY: clean all
 
-nbn: nbn.o
+all: libnbn.so test
+
+libnbn.so: nbn.o
+	$(CC) -shared $(CFLAGS) -o $@ $<
+
+test:CFLAGS+=-L. -lnbn
+test: test.o
+	$(CC) $(CFLAGS) -o $@ $<
 
 clean:
-	-$(RM) nbn.o
+	-$(RM) test.o nbn.o libnbn.so test
 
 .c.o:
 	$(CC) $(CFLAGS) -c -o $@ $<
