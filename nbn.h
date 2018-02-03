@@ -37,6 +37,7 @@ void BN_sub_u8(BN *result, BN *a, uint8_t i);
 void BN_mul(BN *result, BN *a, BN *b);
 void BN_div(BN *q, BN *r, BN *n, BN *d);
 void BN_print(BN *bn);
+int BN_to_string(BN *bn, char *str, size_t str_len);
 
 int BN_from_hex(BN *bn, char *str);
 BN *BN_new_from_hex(char *str);

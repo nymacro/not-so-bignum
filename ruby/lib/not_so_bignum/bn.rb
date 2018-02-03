@@ -28,6 +28,16 @@ module NotSoBignum
       end
     end
 
+    def to_hex
+      buf = FFI::MemoryPointer.new(:uchar, 256)
+      len = C.BN_to_string(ptr, buf, buf.size)
+      buf.read_bytes(len)
+    end
+
+    def to_i
+      to_hex.to_i(16)
+    end
+
     def from_i(i)
       from_hex('%016x' % i)
     end
@@ -40,6 +50,10 @@ module NotSoBignum
 
     def print
       C.BN_print(ptr)
+    end
+
+    def to_s
+      to_hex
     end
 
     binary_op :BN_add, :+

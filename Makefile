@@ -1,4 +1,5 @@
-CFLAGS=-fPIC -fpic -g -Wall
+CC=clang
+CFLAGS=-fPIC -fpic -g -Wall # -fsanitize=memory -fno-omit-frame-pointer
 .PHONY: clean all
 
 all: libnbn.so test

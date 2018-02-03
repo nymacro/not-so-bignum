@@ -3,6 +3,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include "nbn.h"
 
 #define BN_assert_eq(actual, expected)          \
@@ -244,7 +245,7 @@ int main(int argc, char *argv[]) {
     BN_print(r); /* => d0c2e30010000000 */
     BN_assert_eq(r, "d0c2e30010000000");
 
-    puts("\nDivsion");
+    puts("\nDivision");
     puts("--------------");
 
     printf("1 / 1 = ");
@@ -270,6 +271,21 @@ int main(int argc, char *argv[]) {
     BN_print(a);
     BN_assert_eq(a, "03");
     BN_assert_eq(b, "01");
+
+    BN_from_hex(a, "ffffffff");
+    BN_from_hex(b, "3dfe");
+    BN *r2 = BN_new();
+    BN_div(r, r2, a, b);
+    BN_assert_eq(r, "4212a");
+
+    puts("\nConversion");
+    puts("--------------");
+
+    char buf[20];
+    BN_from_hex(r, "abcd");
+    int i = BN_to_string(r, buf, sizeof(buf));
+    buf[i] = 0;
+    assert(strcmp(buf, "abcd") == 0);
 
     BN_free(a);
     BN_free(b);

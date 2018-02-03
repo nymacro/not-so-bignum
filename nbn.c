@@ -20,6 +20,7 @@ BN *BN_new() {
         free(bn);
         return NULL;
     }
+    memset(bn->n, 0, size);
 
     return bn;
 }
@@ -128,8 +129,7 @@ int BN_cmp(BN *a, BN *b) {
 void BN_copy(BN *res, BN *a) {
     unsigned int i;
     if (res == a) {
-        /* abort(); */
-        return;
+        abort();
     }
     if (res->len < a->len) {
         res->n = realloc(res->n, sizeof(uint8_t) * a->len);
@@ -142,6 +142,8 @@ void BN_copy(BN *res, BN *a) {
     for (++i; i < a->len; i++) {
         res->n[i] = 0;
     }
+    for (i = res->top + 1; i < res->len; i++)
+        res->n[i] = 0;
 }
 
 #define BN_const_define(name, value)                                    \
@@ -426,6 +428,22 @@ void BN_print(BN *bn) {
     printf("\n");
 }
 
+int BN_to_string(BN *bn, char *str, size_t str_len) {
+    int i = bn->top;
+    char h[3];
+    BN_fix(bn);
+    size_t bn_len = (bn->top + 1) * 2;
+
+    if (str_len < bn_len)
+        return 0;
+    do {
+        snprintf(h, sizeof(h), "%02x", bn->n[i]);
+        memcpy(str + bn_len - 2 - i * 2, h, 2);
+    } while (i-- > 0);
+
+    return bn_len;
+}
+
 static uint8_t atoh(char c) {
     switch (tolower(c)) {
     case '0': return 0;
@@ -452,7 +470,7 @@ static uint8_t atoh(char c) {
 int BN_from_hex(BN *bn, char *str) {
     size_t len = strlen(str);
     uint8_t i = 0;
-    uint8_t size = (len > 1) ? len / 2 : 1;
+    uint8_t size = (len > 1) ? (len+1) / 2 : 1;
     int16_t d;
 
     BN_expand(bn, size + 1);

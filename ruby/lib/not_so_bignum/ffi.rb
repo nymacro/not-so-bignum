@@ -23,6 +23,7 @@ module NotSoBignum
     attach_function :BN_new_from_hex, [:string], :pointer
 
     attach_function :BN_print, [:pointer], :void
+    attach_function :BN_to_string, [:pointer, :buffer_out, :size_t], :int
 
     attach_function :BN_zero, [], :pointer
     attach_function :BN_one, [], :pointer
