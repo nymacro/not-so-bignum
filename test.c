@@ -272,11 +272,22 @@ int main(int argc, char *argv[]) {
     BN_assert_eq(a, "03");
     BN_assert_eq(b, "01");
 
+    printf("0xffffffff / 0x3dfe = ");
     BN_from_hex(a, "ffffffff");
     BN_from_hex(b, "3dfe");
     BN *r2 = BN_new();
     BN_div(r, r2, a, b);
+    BN_print(r);
     BN_assert_eq(r, "4212a");
+
+    printf("0x974A7BBDCC / 0x3F6EE119B0 = ");
+    BN_from_hex(a, "974A7BBDCC");
+    BN_from_hex(b, "3F6EE119B0");
+    r2 = BN_new();
+    BN_div(r, r2, a, b);
+    BN_print(r);
+    BN_assert_eq(r, "2");
+    BN_assert_eq(r2, "186CB98A6C");
 
     puts("\nConversion");
     puts("--------------");

@@ -15,7 +15,7 @@ module NotSoBignum
     attach_function :BN_add, [:pointer, :pointer, :pointer], :void
     attach_function :BN_sub, [:pointer, :pointer, :pointer], :void
     attach_function :BN_mul, [:pointer, :pointer, :pointer], :void
-    attach_function :BN_div, [:pointer, :pointer, :pointer], :void
+    attach_function :BN_div, [:pointer, :pointer, :pointer, :pointer], :void
     attach_function :BN_shl_u64, [:pointer, :pointer, :uint64], :void
     attach_function :BN_shr_u64, [:pointer, :pointer, :uint64], :void
 

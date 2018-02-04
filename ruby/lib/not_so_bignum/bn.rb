@@ -59,6 +59,22 @@ module NotSoBignum
     binary_op :BN_add, :+
     binary_op :BN_sub, :-
     binary_op :BN_mul, :*
-    binary_op :BN_div, :/
+
+    # binary_op :BN_div, :/
+
+    def div(other)
+      num = self.class.new
+      mod = self.class.new
+      C.BN_div(num.ptr, mod.ptr, ptr, other.ptr)
+      [num, mod]
+    end
+
+    def /(other)
+      div(other).first
+    end
+
+    def mod(other)
+      div(other)[1]
+    end
   end
 end

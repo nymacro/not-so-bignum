@@ -51,9 +51,15 @@ describe NotSoBignum::Bn do
         self.class.new(:bn => bn / other.bn,
                        :num => num / other.num)
       end
+
+      def mod(other)
+        puts "#{num} % #{other.num}"
+        self.class.new(:bn => bn.mod(other.bn),
+                       :num => num % other.num)
+      end
     end
 
-    RANDOM_RANGE = 1_000_000_000_000
+    RANDOM_RANGE = 1_000_000_000
 
     it 'should convert from Integer' do
       Bn.from_i(32).print
@@ -61,7 +67,7 @@ describe NotSoBignum::Bn do
 
     it 'should add' do
       10_000.times do
-        x, y = [Random.rand(RANDOM_RANGE), Random.rand(RANDOM_RANGE)].sort.reverse
+        x, y = [Random.rand(RANDOM_RANGE), Random.rand(RANDOM_RANGE)]
         a = TestBn.from_i(x)
         b = TestBn.from_i(y)
         c = a + b
@@ -81,7 +87,7 @@ describe NotSoBignum::Bn do
 
     it 'should multiply' do
       10_000.times do
-        x, y = [Random.rand(RANDOM_RANGE), Random.rand(RANDOM_RANGE)].sort.reverse
+        x, y = [Random.rand(RANDOM_RANGE), Random.rand(RANDOM_RANGE)]
         a = TestBn.from_i(x)
         b = TestBn.from_i(y)
         c = a * b
@@ -89,14 +95,24 @@ describe NotSoBignum::Bn do
       end
     end
 
-    # it 'should divide' do
-    #   10_000.times do
-    #     x, y = [Random.rand(RANDOM_RANGE/2), Random.rand(RANDOM_RANGE/2)].sort.reverse
-    #     a = TestBn.from_i(x)
-    #     b = TestBn.from_i(y)
-    #     c = a / b
-    #     c.check
-    #   end
-    # end
+    it 'should divide' do
+      10_000.times do
+        x, y = [Random.rand(RANDOM_RANGE), Random.rand(RANDOM_RANGE)]
+        a = TestBn.from_i(x)
+        b = TestBn.from_i(y)
+        c = a / b
+        c.check
+      end
+    end
+
+    it 'should remainder' do
+      10_000.times do
+        x, y = [Random.rand(RANDOM_RANGE), Random.rand(RANDOM_RANGE)]
+        a = TestBn.from_i(x)
+        b = TestBn.from_i(y)
+        c = a.mod(b)
+        c.check
+      end
+    end
   end
 end
