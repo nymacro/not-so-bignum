@@ -1,5 +1,6 @@
 /*
  * not-so-bignum library
+ * Copyright (C) 2017-2019 Aaron Marks. All Rights Reserved.
  */
 #ifndef NBN_H
 #define NBN_H

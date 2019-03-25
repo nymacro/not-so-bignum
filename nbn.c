@@ -1,5 +1,6 @@
 /*
  * not-so-bignum library
+ * Copyright (C) 2017-2019 Aaron Marks. All Rights Reserved.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -394,7 +395,7 @@ void BN_mul(BN *result, BN *a, BN *b) {
 }
 
 /* division: q, r = a / b */
-/* repeated division method */
+/* repeated subtraction method */
 void BN_div(BN *q, BN *r, BN *n, BN *d) {
     BN *tmp1 = BN_new();
     BN *tmp2 = BN_new();
